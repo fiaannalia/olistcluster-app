@@ -18,17 +18,6 @@ plt.rcParams.update({
     'legend.fontsize': 7
 })
 
-# --- Fungsi Top 5 State ---
-def get_top5_states(df, cluster_name):
-    df_filtered = df[df['cluster_name'] == cluster_name]
-    return (
-        df_filtered['seller_state']
-        .value_counts()
-        .head(5)
-        .reset_index(name='count')
-        .rename(columns={'index': 'seller_state'})
-    )
-
 # --- Setup Halaman ---
 st.set_page_config(page_title="Olist Clustering Dashboard", layout="wide")
 st.title("📊 Olist Seller Clustering Dashboard")
@@ -103,7 +92,7 @@ X_scaled = pd.DataFrame(
 model = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
 clusters = model.fit_predict(X_scaled)
 df_cluster['cluster'] = clusters
-df_seller['cluster'] = clusters  # sinkronkan dengan df_seller
+df_seller['cluster'] = clusters
 
 # --- Silhouette dan Elbow ---
 sil_score = silhouette_score(X_scaled, clusters)
@@ -132,13 +121,9 @@ with col2:
 # --- Visualisasi Cluster ---
 st.subheader("Visualisasi Cluster")
 
-cluster_name_map = {0: 'Regular Seller', 1: 'Potensial Seller', 2: 'High-Value Seller'}
-df_cluster['cluster_name'] = df_cluster['cluster'].map(cluster_name_map)
-df_seller['cluster_name'] = df_cluster['cluster_name']
-df_seller['cluster'] = df_cluster['cluster']
-
 if plot_option == "Barplot median per Cluster":
-    st.markdown("### Pilih Fitur untuk Barplot")
+    st.markdown("#### Barplot median per Cluster")
+    st.markdown("##### Pilih Fitur untuk Barplot")
     selected_feature = st.selectbox(
         "Fitur yang Ditampilkan:",
         ["length", "recency", "frequency", "monetary"]
@@ -155,22 +140,25 @@ if plot_option == "Barplot median per Cluster":
     st.pyplot(fig_bar)
 
 elif plot_option == "Distribusi Fitur":
-    median_matrix = df_cluster.groupby('cluster')[['length', 'recency', 'frequency', 'monetary','review','time_process']].median()
+    st.markdown("#### Distribusi Fitur")
+    median_matrix = df_cluster.groupby('cluster')[['length', 'recency', 'frequency', 'monetary', 'review', 'time_process']].median()
     fig, ax = plt.subplots(figsize=(5, 3.5))
     sns.heatmap(median_matrix.T, annot=True, cmap="Blues", fmt=".1f", ax=ax)
     st.pyplot(fig)
 
 elif plot_option == "Distribusi Cluster":
-    fig, ax = plt.subplots(figsize=(3,3))
+    st.markdown("#### Distribusi Cluster")
+    fig, ax = plt.subplots(figsize=(3, 3))
     df_cluster['cluster'].value_counts().plot.pie(
         autopct='%1.1f%%', ax=ax, ylabel='', title='Distribusi Seller per Cluster'
     )
     st.pyplot(fig)
 
 elif plot_option == "Total Revenue per Cluster":
-    revenue_per_cluster = df_seller.groupby('cluster_name')['monetary'].sum().reset_index()
+    st.markdown("#### Total Revenue per Cluster")
+    revenue_per_cluster = df_seller.groupby('cluster')['monetary'].sum().reset_index()
     fig_rev, ax = plt.subplots(figsize=(4, 2.5))
-    sns.barplot(data=revenue_per_cluster, x='cluster_name', y='monetary', palette='viridis', ax=ax)
+    sns.barplot(data=revenue_per_cluster, x='cluster', y='monetary', palette='viridis', ax=ax)
     ax.set_title('Total Revenue per Cluster')
     for p in ax.patches:
         height = p.get_height()
@@ -179,18 +167,18 @@ elif plot_option == "Total Revenue per Cluster":
     st.pyplot(fig_rev)
 
 elif plot_option == "Distribusi Active Months per Cluster":
+    st.markdown("#### Distribusi Active Months per Cluster")
     fig_box, ax2 = plt.subplots(figsize=(4, 2.5))
-    sns.boxplot(data=df_seller, x='cluster_name', y='active_months', palette='Set2', ax=ax2)
+    sns.boxplot(data=df_seller, x='cluster', y='active_months', palette='Set2', ax=ax2)
     ax2.set_title('Distribusi Active Months per Cluster')
     st.pyplot(fig_box)
 
 elif plot_option == "Top 5 State per Cluster":
-    st.markdown(f"### Top 5 State Terbanyak Tiap Cluster (Total: {n_clusters} Cluster)")
+    st.markdown(f"#### Top 5 State Terbanyak Tiap Cluster (Total: {n_clusters} Cluster)")
 
-    # Loop semua cluster
-    num_cols = 3  # banyak kolom per baris (bisa diubah ke 2 jika ingin lebih besar)
-    rows = (n_clusters + num_cols - 1) // num_cols  # jumlah baris
-    
+    num_cols = 3
+    rows = (n_clusters + num_cols - 1) // num_cols
+
     fig, axs = plt.subplots(rows, num_cols, figsize=(4 * num_cols, 2.5 * rows))
     axs = axs.flatten()
 
@@ -215,14 +203,28 @@ elif plot_option == "Top 5 State per Cluster":
             axs[c].annotate(f'{int(width)}', (p.get_x() + width + 0.3, p.get_y() + p.get_height() / 2),
                             ha='left', va='center', fontsize=7)
 
-    # Kosongkan sisa subplot jika jumlah cluster tidak pas dengan grid
     for i in range(n_clusters, len(axs)):
         axs[i].axis("off")
 
     plt.tight_layout()
     st.pyplot(fig)
 
-
-# --- Output Dataframe ---
 st.subheader("📄 Data Seller dengan Cluster")
-st.dataframe(df_cluster.head(10))
+
+# Pilihan filter cluster
+selected_cluster = st.selectbox(
+    "Pilih Cluster untuk Ditampilkan:",
+    options=['Semua'] + sorted(df_cluster['cluster'].unique().tolist())
+)
+
+# Filter berdasarkan pilihan
+if selected_cluster != 'Semua':
+    filtered_df = df_cluster[df_cluster['cluster'] == selected_cluster]
+else:
+    filtered_df = df_cluster
+
+# Urutkan berdasarkan monetary tertinggi
+filtered_df = filtered_df.sort_values(by='monetary', ascending=False)
+
+# Tampilkan top 10 hasilnya
+st.dataframe(filtered_df.head(10))
